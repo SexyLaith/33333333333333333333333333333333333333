@@ -1,7 +1,7 @@
 import sys
 import types
 
-# إنشاء مكتبة وهمية بالكامل وحقنها في الـ Core حق بايثون قبل ما يستوعب
+# ==================== CRITICAL PATCH ====================
 class DummyAudioop:
     error = Exception
     def mul(self, cp, size, factor): return b''
@@ -14,7 +14,7 @@ class DummyAudioop:
     def lin2alaw(self, fragment, width): return b''
 
 sys.modules['audioop'] = DummyAudioop()
-# ====================================================================
+# ========================================================
 
 import discord
 from discord import app_commands
@@ -53,7 +53,7 @@ class MyBot(discord.Client):
         print(f'Logged in as {self.user}')
         await self.tree.sync()
 
-    @tasks.loop(seconds=20)
+    @tasks.loop(seconds=15)
     async def check_voice_status(self):
         if not active_accounts:
             return
@@ -61,44 +61,52 @@ class MyBot(discord.Client):
         for acc in active_accounts:
             token = acc['token']
             channel_id = acc['channel_id']
+            guild_id = acc.get('guild_id') # جلب أيدي السيرفر إذا توفر
             
             headers = {
                 "Authorization": token,
                 "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "*/*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-origin"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
             
             try:
-                check_url = f"https://discord.com/api/v9/channels/{channel_id}"
-                requests.get(check_url, headers=headers)
+                # خطوة 1: جلب معلومات الروم الصوتي لمعرفة أيدي السيرفر (Guild ID) تلقائياً
+                if not guild_id:
+                    ch_res = requests.get(f"https://discord.com/api/v9/channels/{channel_id}", headers=headers)
+                    if ch_res.status_code == 200:
+                        guild_id = ch_res.json().get('guild_id')
+                        acc['guild_id'] = guild_id # حفظه عشان ما يتكرر الطلب
                 
+                if not guild_id:
+                    print(f"[-] Could not find Guild ID for channel {channel_id}")
+                    continue
+
+                # خطوة 2: إرسال طلب الاتصال الصوتي الفعلي (الـ Endpoint الصحيح للحسابات الشخصية)
                 payload = {
-                    "jump_to_voice_channel": True,
-                    "deaf": True,
-                    "mute": True,
+                    "guild_id": guild_id,
+                    "channel_id": channel_id,
+                    "self_mute": True,
                     "self_deaf": True,
-                    "self_mute": True
+                    "self_video": False
                 }
                 
-                connect_url = f"https://discord.com/api/v9/channels/{channel_id}/voice-states/%40me"
+                # إرسال الطلب عبر الـ Gateway/API الخاص بالحساب ومحاكاة الدخول
+                connect_url = f"https://discord.com/api/v9/guilds/{guild_id}/voice-states/%40me"
                 response = requests.patch(connect_url, headers=headers, json=payload)
                 
-                if response.status_code == 204:
-                    print(f"Account [{token[:12]}...] is connected.")
+                if response.status_code in [200, 204]:
+                    print(f"[+] Account [{token[:15]}...] Successfully joined/verified in Voice Channel.")
                 elif response.status_code == 429:
                     retry_after = response.json().get('retry_after', 5)
-                    print(f"Rate limited. Waiting {retry_after} seconds.")
+                    print(f"[!] Rate limited. Waiting {retry_after} seconds.")
                     await asyncio.sleep(retry_after)
+                else:
+                    print(f"[-] Failed to join. Status Code: {response.status_code} - {response.text}")
                     
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"[X] Error executing request: {e}")
             
-            await asyncio.sleep(random.uniform(5.0, 15.0))
+            await asyncio.sleep(random.uniform(2.0, 5.0))
 
     @check_voice_status.before_loop
     async def before_check(self):
@@ -107,12 +115,12 @@ class MyBot(discord.Client):
 class AccountInputModal(discord.ui.Modal, title="Account Information"):
     token_input = discord.ui.TextInput(
         label="Discord Account Token", 
-        placeholder="Enter token here...", 
+        placeholder="Enter user token here...", 
         required=True
     )
     channel_id_input = discord.ui.TextInput(
         label="Voice Channel ID", 
-        placeholder="Enter channel ID here...", 
+        placeholder="Enter voice channel ID here...", 
         required=True
     )
 
@@ -123,9 +131,9 @@ class AccountInputModal(discord.ui.Modal, title="Account Information"):
         
         if account_data not in active_accounts:
             active_accounts.append(account_data)
-            await interaction.response.send_message("Success", ephemeral=True)
+            await interaction.response.send_message("✅ الحساب قيد الدخول الآن، انتظر ثواني ويدخل الروم!", ephemeral=True)
         else:
-            await interaction.response.send_message("Already added", ephemeral=True)
+            await interaction.response.send_message("❌ هذا الحساب مضاف بالفعل سابقاً.", ephemeral=True)
 
 class StartView(discord.ui.View):
     def __init__(self):
