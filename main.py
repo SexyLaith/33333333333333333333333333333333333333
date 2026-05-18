@@ -1,15 +1,19 @@
-# ==================== CRITICAL PYTHON 3.13 PATCH ====================
 import sys
 import types
 
-if 'audioop' not in sys.modules:
-    audioop_mock = types.ModuleType('audioop')
-    audioop_mock.error = Exception
-    audioop_mock.mul = lambda cp, size, factor: b''
-    audioop_mock.max = lambda cp, size: 0
-    audioop_mock.lin2lin = lambda fragment, width, newwidth: b''
-    audioop_mock.ratecv = lambda fragment, width, nchannels, inrate, outrate, state: (b'', None)
-    sys.modules['audioop'] = audioop_mock
+# إنشاء مكتبة وهمية بالكامل وحقنها في الـ Core حق بايثون قبل ما يستوعب
+class DummyAudioop:
+    error = Exception
+    def mul(self, cp, size, factor): return b''
+    def max(self, cp, size): return 0
+    def lin2lin(self, fragment, width, newwidth): return b''
+    def ratecv(self, fragment, width, nchannels, inrate, outrate, state): return (b'', None)
+    def ulaw2lin(self, fragment, width): return b''
+    def lin2ulaw(self, fragment, width): return b''
+    def alaw2lin(self, fragment, width): return b''
+    def lin2alaw(self, fragment, width): return b''
+
+sys.modules['audioop'] = DummyAudioop()
 # ====================================================================
 
 import discord
