@@ -1,16 +1,16 @@
+# ==================== CRITICAL PYTHON 3.13 PATCH ====================
 import sys
 import types
 
-# ==================== PYTHON 3.13 AUDIOOP PATCH ====================
-# هذي الخدعة توهم بايثون 3.13 أن مكتبة audioop موجودة لتفادي انهيار مكتبة ديسكورد
 if 'audioop' not in sys.modules:
-    dummy_audioop = types.ModuleType('audioop')
-    dummy_audioop.error = Exception
-    # إضافة الدوال الأساسية التي تبحث عنها مكتبة discord.py فارغة
-    dummy_audioop.mul = lambda cp, size, factor: b''
-    dummy_audioop.max = lambda cp, size: 0
-    sys.modules['audioop'] = dummy_audioop
-# ===================================================================
+    audioop_mock = types.ModuleType('audioop')
+    audioop_mock.error = Exception
+    audioop_mock.mul = lambda cp, size, factor: b''
+    audioop_mock.max = lambda cp, size: 0
+    audioop_mock.lin2lin = lambda fragment, width, newwidth: b''
+    audioop_mock.ratecv = lambda fragment, width, nchannels, inrate, outrate, state: (b'', None)
+    sys.modules['audioop'] = audioop_mock
+# ====================================================================
 
 import discord
 from discord import app_commands
