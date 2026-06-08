@@ -47,6 +47,7 @@ class DiscordVoiceAFK:
         self.ws_url = "wss://gateway.discord.gg/?v=9&encoding=json"
         self.heartbeat_interval = None
         self.sequence = None
+        self.user_id = None  
 
     async def send_heartbeat(self, ws):
         while True:
@@ -59,6 +60,19 @@ class DiscordVoiceAFK:
                     break
             else:
                 await asyncio.sleep(1)
+
+    async def join_voice(self, ws):
+        voice_state_payload = {
+            "op": 4,
+            "d": {
+                "guild_id": self.guild_id,
+                "channel_id": self.channel_id,
+                "self_mute": True,
+                "self_deaf": True,
+                "self_video": False
+            }
+        }
+        await ws.send(json.dumps(voice_state_payload))
 
     async def start(self):
         print("[*] Connecting to Discord Gateway via Websocket...")
@@ -78,9 +92,9 @@ class DiscordVoiceAFK:
                         "token": self.token,
                         "capabilities": 8189,
                         "properties": {
-                            "os": "Windows",
-                            "browser": "Chrome",
-                            "device": ""
+                            "os": "Android",
+                            "browser": "Discord Android",
+                            "device": "phone"
                         },
                         "presence": {
                             "status": "online",
@@ -93,27 +107,32 @@ class DiscordVoiceAFK:
                 }
                 await ws.send(json.dumps(identify_payload))
                 
-                voice_state_payload = {
-                    "op": 4,
-                    "d": {
-                        "guild_id": self.guild_id,
-                        "channel_id": self.channel_id,
-                        "self_mute": True,
-                        "self_deaf": True,
-                        "self_video": False
-                    }
-                }
-                
                 await asyncio.sleep(1.5)
-                await ws.send(json.dumps(voice_state_payload))
+                await self.join_voice(ws)
                 print(f"[+] Successfully connected! Account is now AFK in Voice Channel: {self.channel_id}")
 
                 async_messages = ws
                 async for message in async_messages:
                     data = json.loads(message)
+                    
                     if data.get('s'):
                         self.sequence = data['s']
-                    if data.get('op') == 7:
+                        
+                    op = data.get('op')
+                    t = data.get('t')
+                    d = data.get('d', {})
+
+                    if t == "READY":
+                        self.user_id = d.get('user', {}).get('id')
+
+                    elif t == "VOICE_STATE_UPDATE":
+                        if self.user_id and d.get('user_id') == self.user_id:
+                            current_channel = d.get('channel_id')
+                            if current_channel != self.channel_id:
+                                print("[!] Detected kick or leave! Rejoining voice channel instantly...")
+                                await self.join_voice(ws)
+
+                    if op == 7:
                         print("[!] Discord requested reconnect. Reconnecting...")
                         break
 
