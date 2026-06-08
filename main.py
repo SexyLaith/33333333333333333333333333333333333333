@@ -97,7 +97,7 @@ class DiscordVoiceAFK:
                             "device": "phone"
                         },
                         "presence": {
-                            "status": "online",
+                            "status": "dnd",
                             "since": 0,
                             "activities": [],
                             "afk": False
